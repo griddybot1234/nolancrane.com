@@ -634,24 +634,14 @@
         player.children[0].rotation.x += 0.02;
         player.children[0].rotation.z += 0.01;
 
-        // Camera follow - smoothly behind player based on direction
-        const camDist = 10;
-        const camHeight = 6;
-        const camOffset = new THREE.Vector3(
-          Math.sin(player.rotation.y) * camDist,
-          camHeight,
-          Math.cos(player.rotation.y) * camDist
+        // Camera - fixed position behind player, no rotation
+        const targetCamPos = new THREE.Vector3(
+          player.position.x,
+          player.position.y + 8,
+          player.position.z + 12
         );
-        const targetCamPos = player.position.clone().add(camOffset);
-        camera.position.lerp(targetCamPos, 0.06);
-
-        // Look ahead of player in their direction
-        const lookAhead = new THREE.Vector3(
-          player.position.x - Math.sin(player.rotation.y) * 5,
-          player.position.y,
-          player.position.z + Math.cos(player.rotation.y) * 5
-        );
-        camera.lookAt(lookAhead);
+        camera.position.lerp(targetCamPos, 0.1);
+        camera.lookAt(player.position);
       }
 
       renderer.render(scene, camera);
