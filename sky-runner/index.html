@@ -470,7 +470,8 @@
       if (finishZone) scene.remove(finishZone);
 
       const level = levelData[levelNum];
-      let currentPos = new THREE.Vector3(0, 0, 0);
+      let currentX = 0;
+      let currentZ = 0;
       let currentAngle = 0;
       let currentElevation = 5; // Start floating
 
@@ -486,18 +487,18 @@
         const segment = new THREE.Mesh(geo, mat);
         segment.receiveShadow = true;
 
-        // Apply turn incrementally
-        currentAngle += seg.turn;
+        // Update elevation
         currentElevation += seg.elevation;
 
-        // Position segment
-        const offsetX = Math.sin(currentAngle) * seg.length / 2;
-        const offsetZ = -Math.cos(currentAngle) * seg.length / 2;
+        // Position segment at the END of current position, extending forward
+        // The segment center is at half its length along its direction
+        const centerOffsetX = Math.sin(currentAngle) * (seg.length / 2);
+        const centerOffsetZ = -Math.cos(currentAngle) * (seg.length / 2);
 
         segment.position.set(
-          currentPos.x + offsetX,
+          currentX + centerOffsetX,
           currentElevation,
-          currentPos.z + offsetZ
+          currentZ + centerOffsetZ
         );
         segment.rotation.y = currentAngle;
 
@@ -515,10 +516,6 @@
         scene.add(segment);
         pathSegments.push(segment);
 
-        // Update position for next segment
-        currentPos.x += Math.sin(currentAngle) * seg.length;
-        currentPos.z -= Math.cos(currentAngle) * seg.length;
-
         // Store segment bounds for collision
         segment.userData = {
           width: seg.width,
@@ -526,13 +523,20 @@
           elevation: currentElevation,
           angle: currentAngle
         };
+
+        // Move current position to END of this segment
+        currentX += Math.sin(currentAngle) * seg.length;
+        currentZ -= Math.cos(currentAngle) * seg.length;
+
+        // Apply turn for NEXT segment
+        currentAngle += seg.turn;
       });
 
-      // Create finish zone
+      // Create finish zone at end
       const finishGeo = new THREE.BoxGeometry(4, 0.6, 4);
       const finishMat = new THREE.MeshLambertMaterial({ color: 0xffdd00 });
       finishZone = new THREE.Mesh(finishGeo, finishMat);
-      finishZone.position.set(currentPos.x, currentElevation, currentPos.z);
+      finishZone.position.set(currentX, currentElevation, currentZ);
       scene.add(finishZone);
 
       // Add finish glow
@@ -556,8 +560,8 @@
       createPlayer();
 
       // Reset player position - spawn on the first path segment
-      // First segment is at y=5, centered at z=-length/2, so spawn near z=-3
-      player.position.set(0, 5.7, -3);
+      // First segment starts at origin and extends forward in -Z
+      player.position.set(0, 5.7, -2);
       playerVelocity.set(0, 0, 0);
       player.rotation.y = 0;
 
@@ -636,12 +640,12 @@
       requestAnimationFrame(animate);
 
       if (isPlaying && player) {
-        // Turn
+        // Turn (fixed direction)
         if (keys.left) {
-          player.rotation.y += turnSpeed;
+          player.rotation.y -= turnSpeed;
         }
         if (keys.right) {
-          player.rotation.y -= turnSpeed;
+          player.rotation.y += turnSpeed;
         }
 
         // Move forward in facing direction
@@ -675,14 +679,15 @@
         player.children[0].rotation.x += 0.02;
         player.children[0].rotation.z += 0.01;
 
-        // Camera follow
-        const camOffset = new THREE.Vector3(
-          Math.sin(player.rotation.y) * 8,
-          5,
-          Math.cos(player.rotation.y) * 8
-        );
-        camera.position.lerp(player.position.clone().add(camOffset), 0.05);
-        camera.lookAt(player.position);
+        // Camera follow - fixed behind player, smooth and stable
+        const camOffset = new THREE.Vector3(0, 6, 10);
+        const targetCamPos = player.position.clone().add(camOffset);
+        camera.position.lerp(targetCamPos, 0.08);
+
+        // Look slightly ahead of player
+        const lookTarget = player.position.clone();
+        lookTarget.z -= 5;
+        camera.lookAt(lookTarget);
       }
 
       renderer.render(scene, camera);
