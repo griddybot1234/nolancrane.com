@@ -280,82 +280,38 @@
     let checkpoints = [];
     let finishZone = null;
 
-    // Level definitions - each segment: { length, turn (radians), elevationChange, width }
+    // Level definitions using path commands
+    // 'S' = straight, 'L' = curve left, 'R' = curve right, 'U' = up, 'D' = down
     const levelData = {
       1: {
         name: "Beginner",
         speed: 0.12,
-        segments: [
-          { length: 30, turn: 0, elevation: 0, width: 5 },
-          { length: 20, turn: 0, elevation: 0, width: 5 },
-          { length: 20, turn: 0, elevation: 0, width: 5 },
-          { length: 25, turn: 0, elevation: 0, width: 5 },
-        ]
+        width: 5,
+        path: "SSSSSSSSSSSSSSSSSSSS" // All straight
       },
       2: {
         name: "Easy Turns",
         speed: 0.13,
-        segments: [
-          { length: 25, turn: 0, elevation: 0, width: 4.5 },
-          { length: 20, turn: Math.PI / 4, elevation: 0, width: 4.5 },
-          { length: 20, turn: 0, elevation: 0, width: 4.5 },
-          { length: 20, turn: -Math.PI / 4, elevation: 0, width: 4.5 },
-          { length: 20, turn: 0, elevation: 0, width: 4.5 },
-          { length: 15, turn: Math.PI / 6, elevation: 0, width: 4.5 },
-          { length: 20, turn: 0, elevation: 0, width: 4.5 },
-        ]
+        width: 4.5,
+        path: "SSSSSLLLLSSSSSRRRRSSSSSLLSSSSS"
       },
       3: {
         name: "Up & Down",
         speed: 0.13,
-        segments: [
-          { length: 20, turn: 0, elevation: 0, width: 4 },
-          { length: 15, turn: 0, elevation: 5, width: 4 },
-          { length: 20, turn: Math.PI / 6, elevation: 0, width: 4 },
-          { length: 15, turn: 0, elevation: -3, width: 4 },
-          { length: 20, turn: -Math.PI / 6, elevation: 0, width: 4 },
-          { length: 15, turn: 0, elevation: 8, width: 4 },
-          { length: 20, turn: 0, elevation: 0, width: 4 },
-          { length: 15, turn: 0, elevation: -5, width: 4 },
-          { length: 20, turn: 0, elevation: 0, width: 4 },
-        ]
+        width: 4,
+        path: "SSSSUUUUSSSLLSSSDDDSSSRRSSUUUUUSSSDDDDSSSS"
       },
       4: {
         name: "Twisty",
         speed: 0.14,
-        segments: [
-          { length: 15, turn: 0, elevation: 0, width: 3.5 },
-          { length: 12, turn: Math.PI / 3, elevation: 2, width: 3.5 },
-          { length: 12, turn: -Math.PI / 3, elevation: 0, width: 3.5 },
-          { length: 15, turn: 0, elevation: 3, width: 3.5 },
-          { length: 12, turn: -Math.PI / 4, elevation: 0, width: 3.5 },
-          { length: 12, turn: Math.PI / 4, elevation: -2, width: 3.5 },
-          { length: 15, turn: 0, elevation: 0, width: 3.5 },
-          { length: 12, turn: Math.PI / 2, elevation: 4, width: 3.5 },
-          { length: 15, turn: 0, elevation: 0, width: 3.5 },
-          { length: 12, turn: -Math.PI / 4, elevation: -3, width: 3.5 },
-          { length: 20, turn: 0, elevation: 0, width: 3.5 },
-        ]
+        width: 3.5,
+        path: "SSSSLLLLUUSSSSRRRRSSSLLLSSUUURRRRRDDSSSSLLLLLSSSSS"
       },
       5: {
         name: "Insane",
         speed: 0.16,
-        segments: [
-          { length: 12, turn: 0, elevation: 0, width: 3 },
-          { length: 10, turn: Math.PI / 2, elevation: 3, width: 3 },
-          { length: 10, turn: -Math.PI / 2, elevation: 0, width: 3 },
-          { length: 8, turn: 0, elevation: 5, width: 2.5 },
-          { length: 10, turn: Math.PI / 3, elevation: 0, width: 3 },
-          { length: 10, turn: -Math.PI / 3, elevation: -3, width: 3 },
-          { length: 8, turn: 0, elevation: 0, width: 2.5 },
-          { length: 10, turn: -Math.PI / 2, elevation: 4, width: 3 },
-          { length: 10, turn: Math.PI / 4, elevation: 0, width: 3 },
-          { length: 8, turn: 0, elevation: 6, width: 2.5 },
-          { length: 10, turn: Math.PI / 2, elevation: 0, width: 3 },
-          { length: 10, turn: -Math.PI / 4, elevation: -5, width: 3 },
-          { length: 8, turn: 0, elevation: 0, width: 2.5 },
-          { length: 15, turn: 0, elevation: 0, width: 4 },
-        ]
+        width: 3,
+        path: "SSSLLLLUUUSSRRRRRRSSSUUUULLLLLLDDDSSRRRRRUUUUSSSLLLLLLDDDDSSSSS"
       }
     };
 
@@ -470,76 +426,75 @@
       if (finishZone) scene.remove(finishZone);
 
       const level = levelData[levelNum];
+      const segmentLength = 3; // Each piece is 3 units long
+      const turnAmount = 0.08; // Radians per turn command
+      const elevationAmount = 0.4; // Units per elevation command
+
       let currentX = 0;
       let currentZ = 0;
       let currentAngle = 0;
-      let currentElevation = 5; // Start floating
+      let currentElevation = 5;
 
-      level.segments.forEach((seg, index) => {
-        // Create path segment
-        const geo = new THREE.BoxGeometry(seg.width, 0.5, seg.length);
+      const pathCommands = level.path.split('');
 
-        // Gradient color based on index
-        const hue = (index / level.segments.length) * 0.3;
+      pathCommands.forEach((cmd, index) => {
+        // Apply command
+        if (cmd === 'L') currentAngle -= turnAmount;
+        if (cmd === 'R') currentAngle += turnAmount;
+        if (cmd === 'U') currentElevation += elevationAmount;
+        if (cmd === 'D') currentElevation -= elevationAmount;
+
+        // Create segment piece
+        const geo = new THREE.BoxGeometry(level.width, 0.5, segmentLength + 0.5); // Slight overlap
+
+        // Color gradient
+        const hue = (index / pathCommands.length) * 0.3;
         const color = new THREE.Color().setHSL(0.5 + hue, 0.7, 0.4);
         const mat = new THREE.MeshLambertMaterial({ color });
 
         const segment = new THREE.Mesh(geo, mat);
         segment.receiveShadow = true;
 
-        // Update elevation
-        currentElevation += seg.elevation;
+        // Position at center of this segment
+        const centerX = currentX + Math.sin(currentAngle) * (segmentLength / 2);
+        const centerZ = currentZ - Math.cos(currentAngle) * (segmentLength / 2);
 
-        // Position segment at the END of current position, extending forward
-        // The segment center is at half its length along its direction
-        const centerOffsetX = Math.sin(currentAngle) * (seg.length / 2);
-        const centerOffsetZ = -Math.cos(currentAngle) * (seg.length / 2);
-
-        segment.position.set(
-          currentX + centerOffsetX,
-          currentElevation,
-          currentZ + centerOffsetZ
-        );
+        segment.position.set(centerX, currentElevation, centerZ);
         segment.rotation.y = currentAngle;
 
-        // Add edge rails for visual guidance
-        const railGeo = new THREE.BoxGeometry(0.2, 0.3, seg.length);
+        // Add edge rails
+        const railGeo = new THREE.BoxGeometry(0.15, 0.25, segmentLength + 0.5);
         const railMat = new THREE.MeshLambertMaterial({ color: 0x00ff88 });
 
         [-1, 1].forEach(side => {
           const rail = new THREE.Mesh(railGeo, railMat);
-          rail.position.x = side * (seg.width / 2 - 0.1);
-          rail.position.y = 0.4;
+          rail.position.x = side * (level.width / 2 - 0.1);
+          rail.position.y = 0.35;
           segment.add(rail);
         });
 
         scene.add(segment);
         pathSegments.push(segment);
 
-        // Store segment bounds for collision
         segment.userData = {
-          width: seg.width,
-          length: seg.length,
+          width: level.width,
+          length: segmentLength,
           elevation: currentElevation,
           angle: currentAngle
         };
 
-        // Move current position to END of this segment
-        currentX += Math.sin(currentAngle) * seg.length;
-        currentZ -= Math.cos(currentAngle) * seg.length;
-
-        // Apply turn for NEXT segment
-        currentAngle += seg.turn;
+        // Move to end of segment
+        currentX += Math.sin(currentAngle) * segmentLength;
+        currentZ -= Math.cos(currentAngle) * segmentLength;
       });
 
-      // Create finish zone at end
-      const finishGeo = new THREE.BoxGeometry(4, 0.6, 4);
+      // Create finish zone
+      const finishGeo = new THREE.BoxGeometry(5, 0.6, 5);
       const finishMat = new THREE.MeshLambertMaterial({ color: 0xffdd00 });
       finishZone = new THREE.Mesh(finishGeo, finishMat);
       finishZone.position.set(currentX, currentElevation, currentZ);
       scene.add(finishZone);
 
-      // Add finish glow
       const finishGlow = new THREE.PointLight(0xffdd00, 1, 10);
       finishGlow.position.set(0, 2, 0);
       finishZone.add(finishGlow);
@@ -679,15 +634,24 @@
         player.children[0].rotation.x += 0.02;
         player.children[0].rotation.z += 0.01;
 
-        // Camera follow - fixed behind player, smooth and stable
-        const camOffset = new THREE.Vector3(0, 6, 10);
+        // Camera follow - smoothly behind player based on direction
+        const camDist = 10;
+        const camHeight = 6;
+        const camOffset = new THREE.Vector3(
+          Math.sin(player.rotation.y) * camDist,
+          camHeight,
+          Math.cos(player.rotation.y) * camDist
+        );
         const targetCamPos = player.position.clone().add(camOffset);
-        camera.position.lerp(targetCamPos, 0.08);
+        camera.position.lerp(targetCamPos, 0.06);
 
-        // Look slightly ahead of player
-        const lookTarget = player.position.clone();
-        lookTarget.z -= 5;
-        camera.lookAt(lookTarget);
+        // Look ahead of player in their direction
+        const lookAhead = new THREE.Vector3(
+          player.position.x - Math.sin(player.rotation.y) * 5,
+          player.position.y,
+          player.position.z + Math.cos(player.rotation.y) * 5
+        );
+        camera.lookAt(lookAhead);
       }
 
       renderer.render(scene, camera);
