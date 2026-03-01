@@ -257,7 +257,7 @@
     </div>
   </div>
 
-  <div class="controls-hint">LEFT/RIGHT to turn | R to restart | SPACE to respawn</div>
+  <div class="controls-hint">LEFT/RIGHT to turn | SPACE to restart</div>
 
   <div class="mobile-controls">
     <button class="mobile-btn" id="left-btn">&larr;</button>
@@ -366,13 +366,8 @@
         if (e.code === 'ArrowLeft' || e.code === 'KeyA') keys.left = true;
         if (e.code === 'ArrowRight' || e.code === 'KeyD') keys.right = true;
 
-        // Space to respawn when dead
-        if (e.code === 'Space' && isDead) {
-          retryLevel();
-        }
-
-        // R to reset anytime during play
-        if (e.code === 'KeyR' && isPlaying) {
+        // Space to reset anytime
+        if (e.code === 'Space' && (isDead || isPlaying)) {
           retryLevel();
         }
       });
@@ -637,8 +632,8 @@
         // Camera - fixed position behind player, no rotation
         const targetCamPos = new THREE.Vector3(
           player.position.x,
-          player.position.y + 8,
-          player.position.z + 12
+          player.position.y + 5,
+          player.position.z + 8
         );
         camera.position.lerp(targetCamPos, 0.1);
         camera.lookAt(player.position);
