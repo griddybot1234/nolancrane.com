@@ -99,6 +99,21 @@
     }
     .back:hover { color: #fff; }
 
+    .countdown {
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      font-size: 8rem;
+      font-weight: bold;
+      color: white;
+      text-shadow: 0 0 40px rgba(102, 126, 234, 0.8);
+      z-index: 150;
+      pointer-events: none;
+    }
+
+    .countdown.hidden { display: none; }
+
     .mobile-controls {
       display: none;
       position: fixed;
@@ -111,13 +126,13 @@
     }
 
     .mobile-btn {
-      width: 80px;
-      height: 80px;
+      width: 70px;
+      height: 70px;
       border-radius: 50%;
       background: rgba(255,255,255,0.2);
       border: 2px solid rgba(255,255,255,0.3);
       color: white;
-      font-size: 2rem;
+      font-size: 1.5rem;
       cursor: pointer;
       touch-action: manipulation;
     }
@@ -140,11 +155,13 @@
     <div class="speed"><span id="speed">80</span> mph</div>
   </div>
 
+  <div class="countdown hidden" id="countdown">3</div>
+
   <div class="overlay" id="start-screen">
     <h1>Traffic Racer</h1>
     <p>Dodge traffic and survive as long as you can!<br>Each level gets faster and more intense.</p>
     <button onclick="startGame()">Start Game</button>
-    <div class="controls">Use LEFT/RIGHT arrows or A/D to change lanes</div>
+    <div class="controls">LEFT/RIGHT to change lanes | DOWN to brake</div>
   </div>
 
   <div class="overlay hidden" id="game-over">
@@ -156,6 +173,7 @@
 
   <div class="mobile-controls">
     <button class="mobile-btn" id="left-btn">&larr;</button>
+    <button class="mobile-btn" id="brake-btn">&darr;</button>
     <button class="mobile-btn" id="right-btn">&rarr;</button>
   </div>
 
@@ -163,32 +181,31 @@
   <script>
     // Game state
     let scene, camera, renderer;
-    let playerCar, world;
+    let playerCar;
     let trafficCars = [];
-    let roadSegments = [];
     let trees = [];
+    let cones = [];
+    let people = [];
     let score = 0;
     let level = 1;
-    let gameSpeed = 0.8;
+    let baseSpeed = 0.8;
+    let currentSpeed = 0.8;
     let isPlaying = false;
+    let isBraking = false;
     let playerLane = 1;
     let targetX = 0;
+    let gameTime = 0;
+    let carsActive = false;
     const laneWidth = 3.5;
     const lanes = [-laneWidth, 0, laneWidth];
 
-    // Road curving
-    let roadCurve = 0;
-    let targetCurve = 0;
-    let curveTimer = 0;
-    let lastSpawnedLanes = [];
-
     // Level configurations
     const levels = [
-      { speed: 0.8, trafficDensity: 0.04, name: "City Streets" },
-      { speed: 1.0, trafficDensity: 0.05, name: "Highway" },
-      { speed: 1.2, trafficDensity: 0.055, name: "Rush Hour" },
-      { speed: 1.4, trafficDensity: 0.06, name: "Chaos Mode" },
-      { speed: 1.6, trafficDensity: 0.065, name: "Insanity" }
+      { speed: 0.8, trafficDensity: 0.025, name: "City Streets" },
+      { speed: 1.0, trafficDensity: 0.03, name: "Highway" },
+      { speed: 1.2, trafficDensity: 0.035, name: "Rush Hour" },
+      { speed: 1.4, trafficDensity: 0.04, name: "Chaos Mode" },
+      { speed: 1.6, trafficDensity: 0.045, name: "Insanity" }
     ];
 
     function init() {
@@ -196,10 +213,6 @@
       scene = new THREE.Scene();
       scene.background = new THREE.Color(0x87ceeb);
       scene.fog = new THREE.Fog(0x87ceeb, 50, 250);
-
-      // World container for curving
-      world = new THREE.Group();
-      scene.add(world);
 
       // Camera
       camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
@@ -232,7 +245,10 @@
       ground.position.y = -0.1;
       ground.position.z = -500;
       ground.receiveShadow = true;
-      world.add(ground);
+      scene.add(ground);
+
+      // Sidewalks
+      createSidewalks();
 
       // Create road
       createRoad();
@@ -240,27 +256,46 @@
       // Create player car
       createPlayerCar();
 
-      // Create initial trees
-      for (let i = 0; i < 80; i++) {
-        createTree(-300 + i * 8);
+      // Create initial scenery
+      for (let i = 0; i < 60; i++) {
+        createTree(-250 + i * 10);
+      }
+
+      // Create cones along road
+      for (let i = 0; i < 40; i++) {
+        createCone(-200 + i * 12);
+      }
+
+      // Create people on sidewalk
+      for (let i = 0; i < 30; i++) {
+        createPerson(-200 + i * 15);
       }
 
       // Controls
       document.addEventListener('keydown', onKeyDown);
+      document.addEventListener('keyup', onKeyUp);
 
       // Mobile controls
-      document.getElementById('left-btn').addEventListener('touchstart', (e) => {
-        e.preventDefault();
-        moveLeft();
-      });
-      document.getElementById('right-btn').addEventListener('touchstart', (e) => {
-        e.preventDefault();
-        moveRight();
-      });
+      document.getElementById('left-btn').addEventListener('touchstart', (e) => { e.preventDefault(); moveLeft(); });
+      document.getElementById('right-btn').addEventListener('touchstart', (e) => { e.preventDefault(); moveRight(); });
+      document.getElementById('brake-btn').addEventListener('touchstart', (e) => { e.preventDefault(); isBraking = true; });
+      document.getElementById('brake-btn').addEventListener('touchend', (e) => { e.preventDefault(); isBraking = false; });
 
       window.addEventListener('resize', onWindowResize);
 
       animate();
+    }
+
+    function createSidewalks() {
+      const sidewalkGeo = new THREE.PlaneGeometry(4, 1500);
+      const sidewalkMat = new THREE.MeshLambertMaterial({ color: 0x999999 });
+
+      for (let side = -1; side <= 1; side += 2) {
+        const sidewalk = new THREE.Mesh(sidewalkGeo, sidewalkMat);
+        sidewalk.rotation.x = -Math.PI / 2;
+        sidewalk.position.set(side * 10, 0.05, -500);
+        scene.add(sidewalk);
+      }
     }
 
     function createRoad() {
@@ -273,8 +308,7 @@
         roadSegment.rotation.x = -Math.PI / 2;
         roadSegment.position.z = -i * 50;
         roadSegment.receiveShadow = true;
-        world.add(roadSegment);
-        roadSegments.push(roadSegment);
+        scene.add(roadSegment);
 
         // Lane markings
         for (let lane = -1; lane <= 1; lane++) {
@@ -285,7 +319,7 @@
             const marking = new THREE.Mesh(markingGeo, markingMat);
             marking.rotation.x = -Math.PI / 2;
             marking.position.set(lane * laneWidth, 0.01, -i * 50 - j * 10);
-            world.add(marking);
+            scene.add(marking);
           }
         }
 
@@ -296,7 +330,7 @@
           const sideLine = new THREE.Mesh(sideGeo, sideMat);
           sideLine.rotation.x = -Math.PI / 2;
           sideLine.position.set(side * (roadWidth / 2 - 0.5), 0.01, -i * 50);
-          world.add(sideLine);
+          scene.add(sideLine);
         }
       }
     }
@@ -365,10 +399,33 @@
       scene.add(playerCar);
     }
 
-    function createTrafficCar(z, forceLane = null) {
-      const car = new THREE.Group();
+    function createTrafficCar(z) {
+      // Find which lanes are blocked at this z position
+      const minGap = 12; // Minimum gap between cars
+      const blockedLanes = new Set();
 
-      const colors = [0x2244ff, 0x22ff44, 0xffff22, 0xff22ff, 0x22ffff, 0xffffff, 0x666666, 0xff8800];
+      trafficCars.forEach(car => {
+        if (Math.abs(car.position.z - z) < minGap) {
+          blockedLanes.add(car.userData.lane);
+        }
+      });
+
+      // Find available lanes
+      const availableLanes = [0, 1, 2].filter(l => !blockedLanes.has(l));
+
+      // Don't spawn if no lanes available or if 2+ lanes blocked (ensure path exists)
+      if (availableLanes.length <= 1) {
+        return null;
+      }
+
+      // Pick a random available lane, but leave at least one open
+      const lanesToUse = availableLanes.slice(0, availableLanes.length - 1);
+      if (lanesToUse.length === 0) return null;
+
+      const lane = lanesToUse[Math.floor(Math.random() * lanesToUse.length)];
+
+      const car = new THREE.Group();
+      const colors = [0x2244ff, 0x22ff44, 0xffff22, 0xff22ff, 0x22ffff, 0xffffff, 0x666666, 0xff8800, 0x8844ff];
       const color = colors[Math.floor(Math.random() * colors.length)];
 
       // Car body
@@ -391,9 +448,7 @@
       // Wheels
       const wheelGeo = new THREE.CylinderGeometry(0.4, 0.4, 0.3, 16);
       const wheelMat = new THREE.MeshLambertMaterial({ color: 0x111111 });
-      const wheelPositions = [[-0.9, 0.4, 1.2], [0.9, 0.4, 1.2], [-0.9, 0.4, -1.2], [0.9, 0.4, -1.2]];
-
-      wheelPositions.forEach(pos => {
+      [[-0.9, 0.4, 1.2], [0.9, 0.4, 1.2], [-0.9, 0.4, -1.2], [0.9, 0.4, -1.2]].forEach(pos => {
         const wheel = new THREE.Mesh(wheelGeo, wheelMat);
         wheel.rotation.z = Math.PI / 2;
         wheel.position.set(...pos);
@@ -403,56 +458,90 @@
       // Taillights
       const taillightGeo = new THREE.BoxGeometry(0.4, 0.2, 0.1);
       const taillightMat = new THREE.MeshBasicMaterial({ color: 0xff0000 });
-      const taillight1 = new THREE.Mesh(taillightGeo, taillightMat);
-      taillight1.position.set(-0.6, 0.6, -2);
-      car.add(taillight1);
-      const taillight2 = new THREE.Mesh(taillightGeo, taillightMat);
-      taillight2.position.set(0.6, 0.6, -2);
-      car.add(taillight2);
-
-      // Smart lane selection - ensure at least one lane is always open
-      let lane;
-      if (forceLane !== null) {
-        lane = forceLane;
-      } else {
-        // Check which lanes are blocked nearby
-        const nearbyZ = 15; // Check cars within this distance
-        const blockedLanes = new Set();
-
-        trafficCars.forEach(existingCar => {
-          if (Math.abs(existingCar.position.z - z) < nearbyZ) {
-            blockedLanes.add(existingCar.userData.lane);
-          }
-        });
-
-        // Find available lanes
-        const availableLanes = [0, 1, 2].filter(l => !blockedLanes.has(l));
-
-        if (availableLanes.length === 0) {
-          // All lanes blocked nearby, don't spawn
-          return null;
-        } else if (availableLanes.length === 3) {
-          // All lanes open, pick randomly but avoid spawning all 3
-          lane = Math.floor(Math.random() * 3);
-        } else {
-          // Some lanes blocked, pick from available with bias toward creating gaps
-          lane = availableLanes[Math.floor(Math.random() * availableLanes.length)];
-        }
-      }
+      [-0.6, 0.6].forEach(x => {
+        const light = new THREE.Mesh(taillightGeo, taillightMat);
+        light.position.set(x, 0.6, -2);
+        car.add(light);
+      });
 
       car.position.set(lanes[lane], 0, z);
       car.userData.lane = lane;
-      car.userData.speed = 0.15 + Math.random() * 0.15;
+      car.userData.speed = 0.1 + Math.random() * 0.2;
 
-      world.add(car);
+      scene.add(car);
       trafficCars.push(car);
       return car;
+    }
+
+    function createCone(z) {
+      const cone = new THREE.Group();
+
+      // Cone body
+      const coneGeo = new THREE.ConeGeometry(0.3, 0.8, 8);
+      const coneMat = new THREE.MeshLambertMaterial({ color: 0xff6600 });
+      const coneBody = new THREE.Mesh(coneGeo, coneMat);
+      coneBody.position.y = 0.4;
+      cone.add(coneBody);
+
+      // White stripe
+      const stripeGeo = new THREE.CylinderGeometry(0.22, 0.25, 0.15, 8);
+      const stripeMat = new THREE.MeshLambertMaterial({ color: 0xffffff });
+      const stripe = new THREE.Mesh(stripeGeo, stripeMat);
+      stripe.position.y = 0.5;
+      cone.add(stripe);
+
+      // Base
+      const baseGeo = new THREE.BoxGeometry(0.6, 0.1, 0.6);
+      const baseMat = new THREE.MeshLambertMaterial({ color: 0x222222 });
+      const base = new THREE.Mesh(baseGeo, baseMat);
+      base.position.y = 0.05;
+      cone.add(base);
+
+      const side = Math.random() > 0.5 ? 1 : -1;
+      cone.position.set(side * 8, 0, z);
+
+      scene.add(cone);
+      cones.push(cone);
+    }
+
+    function createPerson(z) {
+      const person = new THREE.Group();
+
+      // Body
+      const bodyGeo = new THREE.CylinderGeometry(0.25, 0.3, 1, 8);
+      const colors = [0x3366cc, 0xcc3366, 0x66cc33, 0xffcc00, 0xff6600, 0x9933ff];
+      const bodyMat = new THREE.MeshLambertMaterial({ color: colors[Math.floor(Math.random() * colors.length)] });
+      const body = new THREE.Mesh(bodyGeo, bodyMat);
+      body.position.y = 0.8;
+      person.add(body);
+
+      // Head
+      const headGeo = new THREE.SphereGeometry(0.2, 8, 8);
+      const headMat = new THREE.MeshLambertMaterial({ color: 0xffcc99 });
+      const head = new THREE.Mesh(headGeo, headMat);
+      head.position.y = 1.5;
+      person.add(head);
+
+      // Legs
+      const legGeo = new THREE.CylinderGeometry(0.1, 0.1, 0.5, 8);
+      const legMat = new THREE.MeshLambertMaterial({ color: 0x333333 });
+      [-0.15, 0.15].forEach(x => {
+        const leg = new THREE.Mesh(legGeo, legMat);
+        leg.position.set(x, 0.25, 0);
+        person.add(leg);
+      });
+
+      const side = Math.random() > 0.5 ? 1 : -1;
+      const offset = 9.5 + Math.random() * 1.5;
+      person.position.set(side * offset, 0, z);
+
+      scene.add(person);
+      people.push(person);
     }
 
     function createTree(z) {
       const tree = new THREE.Group();
 
-      // Trunk
       const trunkGeo = new THREE.CylinderGeometry(0.3, 0.4, 2, 8);
       const trunkMat = new THREE.MeshLambertMaterial({ color: 0x8b4513 });
       const trunk = new THREE.Mesh(trunkGeo, trunkMat);
@@ -460,7 +549,6 @@
       trunk.castShadow = true;
       tree.add(trunk);
 
-      // Leaves
       const leavesGeo = new THREE.ConeGeometry(1.5, 4, 8);
       const leavesMat = new THREE.MeshLambertMaterial({ color: 0x228b22 });
       const leaves = new THREE.Mesh(leavesGeo, leavesMat);
@@ -469,31 +557,32 @@
       tree.add(leaves);
 
       const side = Math.random() > 0.5 ? 1 : -1;
-      const offset = 12 + Math.random() * 15;
+      const offset = 14 + Math.random() * 12;
       tree.position.set(side * offset, 0, z);
 
-      world.add(tree);
+      scene.add(tree);
       trees.push(tree);
     }
 
     function onKeyDown(e) {
-      if ((e.code === 'ArrowLeft' || e.code === 'KeyA') && isPlaying) {
-        moveLeft();
-      }
-      if ((e.code === 'ArrowRight' || e.code === 'KeyD') && isPlaying) {
-        moveRight();
-      }
+      if (e.code === 'ArrowLeft' || e.code === 'KeyA') moveLeft();
+      if (e.code === 'ArrowRight' || e.code === 'KeyD') moveRight();
+      if (e.code === 'ArrowDown' || e.code === 'KeyS') isBraking = true;
+    }
+
+    function onKeyUp(e) {
+      if (e.code === 'ArrowDown' || e.code === 'KeyS') isBraking = false;
     }
 
     function moveLeft() {
-      if (playerLane > 0) {
+      if (isPlaying && playerLane > 0) {
         playerLane--;
         targetX = lanes[playerLane];
       }
     }
 
     function moveRight() {
-      if (playerLane < 2) {
+      if (isPlaying && playerLane < 2) {
         playerLane++;
         targetX = lanes[playerLane];
       }
@@ -515,25 +604,36 @@
       playerLane = 1;
       targetX = 0;
       playerCar.position.x = 0;
-      playerCar.rotation.y = 0;
-      gameSpeed = levels[0].speed;
-      roadCurve = 0;
-      targetCurve = 0;
-      curveTimer = 0;
-      world.rotation.y = 0;
+      playerCar.rotation.z = 0;
+      baseSpeed = levels[0].speed;
+      currentSpeed = baseSpeed;
+      gameTime = 0;
+      carsActive = false;
 
       // Clear traffic
-      trafficCars.forEach(car => world.remove(car));
+      trafficCars.forEach(car => scene.remove(car));
       trafficCars = [];
 
-      // Spawn initial traffic immediately (close to player)
-      for (let i = 0; i < 8; i++) {
-        const z = -30 - i * 20;
-        createTrafficCar(z);
-      }
+      // Start countdown
+      showCountdown(3);
 
       isPlaying = true;
       updateUI();
+    }
+
+    function showCountdown(num) {
+      const el = document.getElementById('countdown');
+      if (num > 0) {
+        el.textContent = num;
+        el.classList.remove('hidden');
+        setTimeout(() => showCountdown(num - 1), 1000);
+      } else {
+        el.textContent = 'GO!';
+        setTimeout(() => {
+          el.classList.add('hidden');
+          carsActive = true;
+        }, 500);
+      }
     }
 
     function gameOver() {
@@ -546,14 +646,13 @@
     function updateUI() {
       document.getElementById('score').textContent = score;
       document.getElementById('level').textContent = level;
-      document.getElementById('speed').textContent = Math.floor(80 + gameSpeed * 80);
+      document.getElementById('speed').textContent = Math.floor(60 + currentSpeed * 80);
     }
 
     function checkCollision() {
       const playerBox = new THREE.Box3().setFromObject(playerCar);
-      // Shrink hitbox slightly for fairness
-      playerBox.min.add(new THREE.Vector3(0.4, 0, 0.5));
-      playerBox.max.add(new THREE.Vector3(-0.4, 0, -0.5));
+      playerBox.min.add(new THREE.Vector3(0.3, 0, 0.4));
+      playerBox.max.add(new THREE.Vector3(-0.3, 0, -0.4));
 
       for (const car of trafficCars) {
         const carBox = new THREE.Box3().setFromObject(car);
@@ -568,78 +667,78 @@
       requestAnimationFrame(animate);
 
       if (isPlaying) {
+        gameTime++;
         const currentLevel = levels[Math.min(level - 1, levels.length - 1)];
-        gameSpeed = currentLevel.speed;
+        baseSpeed = currentLevel.speed;
 
-        // Road curving
-        curveTimer++;
-        if (curveTimer > 120) {
-          curveTimer = 0;
-          // Random curve direction
-          targetCurve = (Math.random() - 0.5) * 0.015;
-          // Sometimes go straight
-          if (Math.random() < 0.3) targetCurve = 0;
+        // Braking
+        if (isBraking) {
+          currentSpeed = Math.max(0.3, currentSpeed - 0.02);
+        } else {
+          currentSpeed += (baseSpeed - currentSpeed) * 0.05;
         }
 
-        // Smooth curve transition
-        roadCurve += (targetCurve - roadCurve) * 0.02;
-        world.rotation.y += roadCurve;
+        // Move player car smoothly
+        playerCar.position.x += (targetX - playerCar.position.x) * 0.12;
 
-        // Move player car smoothly to target lane
-        playerCar.position.x += (targetX - playerCar.position.x) * 0.15;
-
-        // Car tilt when turning
-        const tiltAmount = (targetX - playerCar.position.x) * 0.1;
-        playerCar.rotation.z = -tiltAmount * 0.5;
-
-        // Counter-steer visual based on road curve
-        playerCar.rotation.y = -roadCurve * 30;
+        // Tilt when changing lanes
+        const tiltAmount = (targetX - playerCar.position.x) * 0.08;
+        playerCar.rotation.z = -tiltAmount * 0.4;
 
         // Move traffic
         for (let i = trafficCars.length - 1; i >= 0; i--) {
           const car = trafficCars[i];
-          car.position.z += gameSpeed - car.userData.speed;
+          car.position.z += currentSpeed - car.userData.speed;
 
-          // Remove cars that are behind the player
           if (car.position.z > 25) {
-            world.remove(car);
+            scene.remove(car);
             trafficCars.splice(i, 1);
             score += 10;
 
-            // Level up every 200 points
             const newLevel = Math.floor(score / 200) + 1;
             if (newLevel > level && newLevel <= levels.length) {
               level = newLevel;
             }
-
             updateUI();
           }
         }
 
-        // Spawn new traffic - smarter spawning
-        if (Math.random() < currentLevel.trafficDensity) {
-          const spawnZ = -120 - Math.random() * 30;
-          createTrafficCar(spawnZ);
+        // Spawn traffic (only after countdown)
+        if (carsActive && Math.random() < currentLevel.trafficDensity) {
+          createTrafficCar(-100 - Math.random() * 50);
         }
 
-        // Move trees
-        trees.forEach(tree => {
-          tree.position.z += gameSpeed;
-          if (tree.position.z > 50) {
-            tree.position.z = -400;
-            const side = Math.random() > 0.5 ? 1 : -1;
-            tree.position.x = side * (12 + Math.random() * 15);
-          }
-        });
+        // Move scenery
+        const moveScenery = (arr, resetZ) => {
+          arr.forEach(obj => {
+            obj.position.z += currentSpeed;
+            if (obj.position.z > 50) {
+              obj.position.z = resetZ;
+              const side = Math.random() > 0.5 ? 1 : -1;
+              if (arr === trees) {
+                obj.position.x = side * (14 + Math.random() * 12);
+              } else if (arr === cones) {
+                obj.position.x = side * 8;
+              } else if (arr === people) {
+                obj.position.x = side * (9.5 + Math.random() * 1.5);
+              }
+            }
+          });
+        };
+
+        moveScenery(trees, -350);
+        moveScenery(cones, -300);
+        moveScenery(people, -280);
 
         // Check collision
-        if (checkCollision()) {
+        if (carsActive && checkCollision()) {
           gameOver();
         }
 
-        // Camera follow with curve
+        // Camera follow
         camera.position.x = playerCar.position.x * 0.3;
-        camera.rotation.y = -roadCurve * 10;
+
+        updateUI();
       }
 
       renderer.render(scene, camera);
