@@ -137,7 +137,7 @@
   <div class="ui">
     <div class="level">Level <span id="level">1</span></div>
     <div class="score">Score: <span id="score">0</span></div>
-    <div class="speed"><span id="speed">60</span> mph</div>
+    <div class="speed"><span id="speed">80</span> mph</div>
   </div>
 
   <div class="overlay" id="start-screen">
@@ -163,33 +163,43 @@
   <script>
     // Game state
     let scene, camera, renderer;
-    let playerCar, road;
+    let playerCar, world;
     let trafficCars = [];
     let roadSegments = [];
     let trees = [];
     let score = 0;
     let level = 1;
-    let gameSpeed = 0.5;
+    let gameSpeed = 0.8;
     let isPlaying = false;
-    let playerLane = 1; // 0, 1, 2 (left, center, right)
+    let playerLane = 1;
     let targetX = 0;
     const laneWidth = 3.5;
     const lanes = [-laneWidth, 0, laneWidth];
 
+    // Road curving
+    let roadCurve = 0;
+    let targetCurve = 0;
+    let curveTimer = 0;
+    let lastSpawnedLanes = [];
+
     // Level configurations
     const levels = [
-      { speed: 0.5, trafficDensity: 0.02, name: "City Streets" },
-      { speed: 0.65, trafficDensity: 0.025, name: "Highway" },
-      { speed: 0.8, trafficDensity: 0.03, name: "Rush Hour" },
-      { speed: 1.0, trafficDensity: 0.035, name: "Chaos Mode" },
-      { speed: 1.2, trafficDensity: 0.04, name: "Insanity" }
+      { speed: 0.8, trafficDensity: 0.04, name: "City Streets" },
+      { speed: 1.0, trafficDensity: 0.05, name: "Highway" },
+      { speed: 1.2, trafficDensity: 0.055, name: "Rush Hour" },
+      { speed: 1.4, trafficDensity: 0.06, name: "Chaos Mode" },
+      { speed: 1.6, trafficDensity: 0.065, name: "Insanity" }
     ];
 
     function init() {
       // Scene
       scene = new THREE.Scene();
       scene.background = new THREE.Color(0x87ceeb);
-      scene.fog = new THREE.Fog(0x87ceeb, 50, 200);
+      scene.fog = new THREE.Fog(0x87ceeb, 50, 250);
+
+      // World container for curving
+      world = new THREE.Group();
+      scene.add(world);
 
       // Camera
       camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
@@ -212,23 +222,17 @@
       sunLight.castShadow = true;
       sunLight.shadow.mapSize.width = 2048;
       sunLight.shadow.mapSize.height = 2048;
-      sunLight.shadow.camera.near = 0.5;
-      sunLight.shadow.camera.far = 500;
-      sunLight.shadow.camera.left = -100;
-      sunLight.shadow.camera.right = 100;
-      sunLight.shadow.camera.top = 100;
-      sunLight.shadow.camera.bottom = -100;
       scene.add(sunLight);
 
       // Ground
-      const groundGeo = new THREE.PlaneGeometry(200, 1000);
+      const groundGeo = new THREE.PlaneGeometry(500, 1500);
       const groundMat = new THREE.MeshLambertMaterial({ color: 0x228b22 });
       const ground = new THREE.Mesh(groundGeo, groundMat);
       ground.rotation.x = -Math.PI / 2;
       ground.position.y = -0.1;
-      ground.position.z = -400;
+      ground.position.z = -500;
       ground.receiveShadow = true;
-      scene.add(ground);
+      world.add(ground);
 
       // Create road
       createRoad();
@@ -237,13 +241,12 @@
       createPlayerCar();
 
       // Create initial trees
-      for (let i = 0; i < 50; i++) {
-        createTree(-200 + i * 8);
+      for (let i = 0; i < 80; i++) {
+        createTree(-300 + i * 8);
       }
 
       // Controls
       document.addEventListener('keydown', onKeyDown);
-      document.addEventListener('keyup', onKeyUp);
 
       // Mobile controls
       document.getElementById('left-btn').addEventListener('touchstart', (e) => {
@@ -263,14 +266,14 @@
     function createRoad() {
       const roadWidth = 14;
 
-      for (let i = 0; i < 20; i++) {
+      for (let i = 0; i < 30; i++) {
         const roadGeo = new THREE.PlaneGeometry(roadWidth, 50);
         const roadMat = new THREE.MeshLambertMaterial({ color: 0x333333 });
         const roadSegment = new THREE.Mesh(roadGeo, roadMat);
         roadSegment.rotation.x = -Math.PI / 2;
         roadSegment.position.z = -i * 50;
         roadSegment.receiveShadow = true;
-        scene.add(roadSegment);
+        world.add(roadSegment);
         roadSegments.push(roadSegment);
 
         // Lane markings
@@ -282,7 +285,7 @@
             const marking = new THREE.Mesh(markingGeo, markingMat);
             marking.rotation.x = -Math.PI / 2;
             marking.position.set(lane * laneWidth, 0.01, -i * 50 - j * 10);
-            scene.add(marking);
+            world.add(marking);
           }
         }
 
@@ -293,7 +296,7 @@
           const sideLine = new THREE.Mesh(sideGeo, sideMat);
           sideLine.rotation.x = -Math.PI / 2;
           sideLine.position.set(side * (roadWidth / 2 - 0.5), 0.01, -i * 50);
-          scene.add(sideLine);
+          world.add(sideLine);
         }
       }
     }
@@ -362,10 +365,10 @@
       scene.add(playerCar);
     }
 
-    function createTrafficCar(z) {
+    function createTrafficCar(z, forceLane = null) {
       const car = new THREE.Group();
 
-      const colors = [0x2244ff, 0x22ff44, 0xffff22, 0xff22ff, 0x22ffff, 0xffffff, 0x666666];
+      const colors = [0x2244ff, 0x22ff44, 0xffff22, 0xff22ff, 0x22ffff, 0xffffff, 0x666666, 0xff8800];
       const color = colors[Math.floor(Math.random() * colors.length)];
 
       // Car body
@@ -407,13 +410,43 @@
       taillight2.position.set(0.6, 0.6, -2);
       car.add(taillight2);
 
-      const lane = Math.floor(Math.random() * 3);
+      // Smart lane selection - ensure at least one lane is always open
+      let lane;
+      if (forceLane !== null) {
+        lane = forceLane;
+      } else {
+        // Check which lanes are blocked nearby
+        const nearbyZ = 15; // Check cars within this distance
+        const blockedLanes = new Set();
+
+        trafficCars.forEach(existingCar => {
+          if (Math.abs(existingCar.position.z - z) < nearbyZ) {
+            blockedLanes.add(existingCar.userData.lane);
+          }
+        });
+
+        // Find available lanes
+        const availableLanes = [0, 1, 2].filter(l => !blockedLanes.has(l));
+
+        if (availableLanes.length === 0) {
+          // All lanes blocked nearby, don't spawn
+          return null;
+        } else if (availableLanes.length === 3) {
+          // All lanes open, pick randomly but avoid spawning all 3
+          lane = Math.floor(Math.random() * 3);
+        } else {
+          // Some lanes blocked, pick from available with bias toward creating gaps
+          lane = availableLanes[Math.floor(Math.random() * availableLanes.length)];
+        }
+      }
+
       car.position.set(lanes[lane], 0, z);
       car.userData.lane = lane;
-      car.userData.speed = 0.2 + Math.random() * 0.2;
+      car.userData.speed = 0.15 + Math.random() * 0.15;
 
-      scene.add(car);
+      world.add(car);
       trafficCars.push(car);
+      return car;
     }
 
     function createTree(z) {
@@ -436,27 +469,20 @@
       tree.add(leaves);
 
       const side = Math.random() > 0.5 ? 1 : -1;
-      const offset = 12 + Math.random() * 10;
+      const offset = 12 + Math.random() * 15;
       tree.position.set(side * offset, 0, z);
 
-      scene.add(tree);
+      world.add(tree);
       trees.push(tree);
     }
 
-    let keys = {};
-
     function onKeyDown(e) {
-      keys[e.code] = true;
       if ((e.code === 'ArrowLeft' || e.code === 'KeyA') && isPlaying) {
         moveLeft();
       }
       if ((e.code === 'ArrowRight' || e.code === 'KeyD') && isPlaying) {
         moveRight();
       }
-    }
-
-    function onKeyUp(e) {
-      keys[e.code] = false;
     }
 
     function moveLeft() {
@@ -489,11 +515,22 @@
       playerLane = 1;
       targetX = 0;
       playerCar.position.x = 0;
+      playerCar.rotation.y = 0;
       gameSpeed = levels[0].speed;
+      roadCurve = 0;
+      targetCurve = 0;
+      curveTimer = 0;
+      world.rotation.y = 0;
 
       // Clear traffic
-      trafficCars.forEach(car => scene.remove(car));
+      trafficCars.forEach(car => world.remove(car));
       trafficCars = [];
+
+      // Spawn initial traffic immediately (close to player)
+      for (let i = 0; i < 8; i++) {
+        const z = -30 - i * 20;
+        createTrafficCar(z);
+      }
 
       isPlaying = true;
       updateUI();
@@ -509,13 +546,14 @@
     function updateUI() {
       document.getElementById('score').textContent = score;
       document.getElementById('level').textContent = level;
-      document.getElementById('speed').textContent = Math.floor(60 + gameSpeed * 100);
+      document.getElementById('speed').textContent = Math.floor(80 + gameSpeed * 80);
     }
 
     function checkCollision() {
       const playerBox = new THREE.Box3().setFromObject(playerCar);
-      playerBox.min.add(new THREE.Vector3(0.3, 0, 0.3));
-      playerBox.max.add(new THREE.Vector3(-0.3, 0, -0.3));
+      // Shrink hitbox slightly for fairness
+      playerBox.min.add(new THREE.Vector3(0.4, 0, 0.5));
+      playerBox.max.add(new THREE.Vector3(-0.4, 0, -0.5));
 
       for (const car of trafficCars) {
         const carBox = new THREE.Box3().setFromObject(car);
@@ -533,21 +571,39 @@
         const currentLevel = levels[Math.min(level - 1, levels.length - 1)];
         gameSpeed = currentLevel.speed;
 
+        // Road curving
+        curveTimer++;
+        if (curveTimer > 120) {
+          curveTimer = 0;
+          // Random curve direction
+          targetCurve = (Math.random() - 0.5) * 0.015;
+          // Sometimes go straight
+          if (Math.random() < 0.3) targetCurve = 0;
+        }
+
+        // Smooth curve transition
+        roadCurve += (targetCurve - roadCurve) * 0.02;
+        world.rotation.y += roadCurve;
+
         // Move player car smoothly to target lane
         playerCar.position.x += (targetX - playerCar.position.x) * 0.15;
 
-        // Slight car tilt when turning
+        // Car tilt when turning
         const tiltAmount = (targetX - playerCar.position.x) * 0.1;
         playerCar.rotation.z = -tiltAmount * 0.5;
 
+        // Counter-steer visual based on road curve
+        playerCar.rotation.y = -roadCurve * 30;
+
         // Move traffic
-        trafficCars.forEach((car, index) => {
+        for (let i = trafficCars.length - 1; i >= 0; i--) {
+          const car = trafficCars[i];
           car.position.z += gameSpeed - car.userData.speed;
 
           // Remove cars that are behind the player
-          if (car.position.z > 20) {
-            scene.remove(car);
-            trafficCars.splice(index, 1);
+          if (car.position.z > 25) {
+            world.remove(car);
+            trafficCars.splice(i, 1);
             score += 10;
 
             // Level up every 200 points
@@ -558,18 +614,21 @@
 
             updateUI();
           }
-        });
+        }
 
-        // Spawn new traffic
+        // Spawn new traffic - smarter spawning
         if (Math.random() < currentLevel.trafficDensity) {
-          createTrafficCar(-150 - Math.random() * 50);
+          const spawnZ = -120 - Math.random() * 30;
+          createTrafficCar(spawnZ);
         }
 
         // Move trees
-        trees.forEach((tree, index) => {
+        trees.forEach(tree => {
           tree.position.z += gameSpeed;
           if (tree.position.z > 50) {
-            tree.position.z = -350;
+            tree.position.z = -400;
+            const side = Math.random() > 0.5 ? 1 : -1;
+            tree.position.x = side * (12 + Math.random() * 15);
           }
         });
 
@@ -578,8 +637,9 @@
           gameOver();
         }
 
-        // Camera follow with slight movement
+        // Camera follow with curve
         camera.position.x = playerCar.position.x * 0.3;
+        camera.rotation.y = -roadCurve * 10;
       }
 
       renderer.render(scene, camera);
