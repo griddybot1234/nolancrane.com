@@ -1,0 +1,679 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sky Runner</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      overflow: hidden;
+      font-family: system-ui, -apple-system, sans-serif;
+      background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+    }
+    canvas { display: block; }
+
+    .back {
+      position: fixed;
+      top: 1rem;
+      left: 1rem;
+      color: #666;
+      text-decoration: none;
+      z-index: 300;
+    }
+    .back:hover { color: #fff; }
+
+    .ui {
+      position: fixed;
+      top: 1rem;
+      right: 1rem;
+      color: white;
+      font-size: 1.25rem;
+      text-shadow: 0 2px 10px rgba(0,0,0,0.5);
+      z-index: 100;
+    }
+
+    .level-select {
+      position: fixed;
+      inset: 0;
+      background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      z-index: 200;
+    }
+
+    .level-select.hidden { display: none; }
+
+    .level-select h1 {
+      font-size: 3.5rem;
+      margin-bottom: 0.5rem;
+      background: linear-gradient(135deg, #00d9ff 0%, #00ff88 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .level-select .subtitle {
+      color: #666;
+      margin-bottom: 3rem;
+    }
+
+    .levels {
+      display: flex;
+      gap: 1rem;
+      flex-wrap: wrap;
+      justify-content: center;
+      max-width: 600px;
+    }
+
+    .level-btn {
+      width: 100px;
+      height: 100px;
+      border: 2px solid #333;
+      border-radius: 12px;
+      background: linear-gradient(135deg, #252540 0%, #1a1a30 100%);
+      color: white;
+      cursor: pointer;
+      transition: all 0.2s;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .level-btn:hover {
+      border-color: #00d9ff;
+      transform: scale(1.05);
+      box-shadow: 0 0 20px rgba(0, 217, 255, 0.3);
+    }
+
+    .level-btn .num {
+      font-size: 2rem;
+      font-weight: bold;
+      background: linear-gradient(135deg, #00d9ff 0%, #00ff88 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .level-btn .name {
+      font-size: 0.7rem;
+      color: #888;
+      margin-top: 0.25rem;
+    }
+
+    .level-btn.locked {
+      opacity: 0.4;
+      cursor: not-allowed;
+    }
+
+    .overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.85);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      color: white;
+      z-index: 250;
+    }
+
+    .overlay.hidden { display: none; }
+
+    .overlay h1 {
+      font-size: 3rem;
+      margin-bottom: 1rem;
+    }
+
+    .overlay.win h1 {
+      background: linear-gradient(135deg, #00ff88 0%, #00d9ff 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .overlay.lose h1 {
+      background: linear-gradient(135deg, #ff4444 0%, #ff8800 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .overlay p {
+      color: #888;
+      margin-bottom: 2rem;
+    }
+
+    .overlay button {
+      padding: 1rem 2rem;
+      font-size: 1.1rem;
+      border: none;
+      border-radius: 50px;
+      color: white;
+      cursor: pointer;
+      margin: 0.5rem;
+      transition: transform 0.2s;
+    }
+
+    .overlay button:hover {
+      transform: scale(1.05);
+    }
+
+    .overlay .retry {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    }
+
+    .overlay .menu {
+      background: #333;
+    }
+
+    .controls-hint {
+      position: fixed;
+      bottom: 2rem;
+      left: 50%;
+      transform: translateX(-50%);
+      color: #444;
+      font-size: 0.9rem;
+      z-index: 100;
+    }
+
+    .mobile-controls {
+      display: none;
+      position: fixed;
+      bottom: 2rem;
+      left: 0;
+      right: 0;
+      justify-content: center;
+      gap: 2rem;
+      z-index: 100;
+    }
+
+    .mobile-btn {
+      width: 80px;
+      height: 80px;
+      border-radius: 50%;
+      background: rgba(255,255,255,0.15);
+      border: 2px solid rgba(255,255,255,0.2);
+      color: white;
+      font-size: 2rem;
+      cursor: pointer;
+      touch-action: manipulation;
+    }
+
+    @media (pointer: coarse) {
+      .mobile-controls { display: flex; }
+      .controls-hint { display: none; }
+    }
+  </style>
+</head>
+<body>
+  <a href="/" class="back">&larr; back</a>
+
+  <div class="ui">
+    <div id="level-display"></div>
+  </div>
+
+  <div class="level-select" id="level-select">
+    <h1>Sky Runner</h1>
+    <p class="subtitle">Guide the box through floating paths</p>
+    <div class="levels">
+      <button class="level-btn" onclick="startLevel(1)">
+        <div class="num">1</div>
+        <div class="name">Beginner</div>
+      </button>
+      <button class="level-btn" onclick="startLevel(2)">
+        <div class="num">2</div>
+        <div class="name">Easy Turns</div>
+      </button>
+      <button class="level-btn" onclick="startLevel(3)">
+        <div class="num">3</div>
+        <div class="name">Up & Down</div>
+      </button>
+      <button class="level-btn" onclick="startLevel(4)">
+        <div class="num">4</div>
+        <div class="name">Twisty</div>
+      </button>
+      <button class="level-btn" onclick="startLevel(5)">
+        <div class="num">5</div>
+        <div class="name">Insane</div>
+      </button>
+    </div>
+  </div>
+
+  <div class="overlay hidden" id="win-screen">
+    <h1>Level Complete!</h1>
+    <p>You made it to the end!</p>
+    <div>
+      <button class="retry" onclick="nextLevel()">Next Level</button>
+      <button class="menu" onclick="showMenu()">Menu</button>
+    </div>
+  </div>
+
+  <div class="overlay lose hidden" id="lose-screen">
+    <h1>You Fell!</h1>
+    <p>Try to stay on the path</p>
+    <div>
+      <button class="retry" onclick="retryLevel()">Try Again</button>
+      <button class="menu" onclick="showMenu()">Menu</button>
+    </div>
+  </div>
+
+  <div class="controls-hint">LEFT/RIGHT arrows or A/D to turn</div>
+
+  <div class="mobile-controls">
+    <button class="mobile-btn" id="left-btn">&larr;</button>
+    <button class="mobile-btn" id="right-btn">&rarr;</button>
+  </div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script>
+    let scene, camera, renderer;
+    let player, playerVelocity;
+    let pathSegments = [];
+    let currentLevel = 1;
+    let isPlaying = false;
+    let keys = { left: false, right: false };
+    let playerSpeed = 0.15;
+    let turnSpeed = 0.08;
+    let gravity = -0.015;
+    let groundY = 0;
+    let onGround = false;
+    let checkpoints = [];
+    let finishZone = null;
+
+    // Level definitions - each segment: { length, turn (radians), elevationChange, width }
+    const levelData = {
+      1: {
+        name: "Beginner",
+        speed: 0.12,
+        segments: [
+          { length: 30, turn: 0, elevation: 0, width: 5 },
+          { length: 20, turn: 0, elevation: 0, width: 5 },
+          { length: 20, turn: 0, elevation: 0, width: 5 },
+          { length: 25, turn: 0, elevation: 0, width: 5 },
+        ]
+      },
+      2: {
+        name: "Easy Turns",
+        speed: 0.13,
+        segments: [
+          { length: 25, turn: 0, elevation: 0, width: 4.5 },
+          { length: 20, turn: Math.PI / 4, elevation: 0, width: 4.5 },
+          { length: 20, turn: 0, elevation: 0, width: 4.5 },
+          { length: 20, turn: -Math.PI / 4, elevation: 0, width: 4.5 },
+          { length: 20, turn: 0, elevation: 0, width: 4.5 },
+          { length: 15, turn: Math.PI / 6, elevation: 0, width: 4.5 },
+          { length: 20, turn: 0, elevation: 0, width: 4.5 },
+        ]
+      },
+      3: {
+        name: "Up & Down",
+        speed: 0.13,
+        segments: [
+          { length: 20, turn: 0, elevation: 0, width: 4 },
+          { length: 15, turn: 0, elevation: 5, width: 4 },
+          { length: 20, turn: Math.PI / 6, elevation: 0, width: 4 },
+          { length: 15, turn: 0, elevation: -3, width: 4 },
+          { length: 20, turn: -Math.PI / 6, elevation: 0, width: 4 },
+          { length: 15, turn: 0, elevation: 8, width: 4 },
+          { length: 20, turn: 0, elevation: 0, width: 4 },
+          { length: 15, turn: 0, elevation: -5, width: 4 },
+          { length: 20, turn: 0, elevation: 0, width: 4 },
+        ]
+      },
+      4: {
+        name: "Twisty",
+        speed: 0.14,
+        segments: [
+          { length: 15, turn: 0, elevation: 0, width: 3.5 },
+          { length: 12, turn: Math.PI / 3, elevation: 2, width: 3.5 },
+          { length: 12, turn: -Math.PI / 3, elevation: 0, width: 3.5 },
+          { length: 15, turn: 0, elevation: 3, width: 3.5 },
+          { length: 12, turn: -Math.PI / 4, elevation: 0, width: 3.5 },
+          { length: 12, turn: Math.PI / 4, elevation: -2, width: 3.5 },
+          { length: 15, turn: 0, elevation: 0, width: 3.5 },
+          { length: 12, turn: Math.PI / 2, elevation: 4, width: 3.5 },
+          { length: 15, turn: 0, elevation: 0, width: 3.5 },
+          { length: 12, turn: -Math.PI / 4, elevation: -3, width: 3.5 },
+          { length: 20, turn: 0, elevation: 0, width: 3.5 },
+        ]
+      },
+      5: {
+        name: "Insane",
+        speed: 0.16,
+        segments: [
+          { length: 12, turn: 0, elevation: 0, width: 3 },
+          { length: 10, turn: Math.PI / 2, elevation: 3, width: 3 },
+          { length: 10, turn: -Math.PI / 2, elevation: 0, width: 3 },
+          { length: 8, turn: 0, elevation: 5, width: 2.5 },
+          { length: 10, turn: Math.PI / 3, elevation: 0, width: 3 },
+          { length: 10, turn: -Math.PI / 3, elevation: -3, width: 3 },
+          { length: 8, turn: 0, elevation: 0, width: 2.5 },
+          { length: 10, turn: -Math.PI / 2, elevation: 4, width: 3 },
+          { length: 10, turn: Math.PI / 4, elevation: 0, width: 3 },
+          { length: 8, turn: 0, elevation: 6, width: 2.5 },
+          { length: 10, turn: Math.PI / 2, elevation: 0, width: 3 },
+          { length: 10, turn: -Math.PI / 4, elevation: -5, width: 3 },
+          { length: 8, turn: 0, elevation: 0, width: 2.5 },
+          { length: 15, turn: 0, elevation: 0, width: 4 },
+        ]
+      }
+    };
+
+    function init() {
+      scene = new THREE.Scene();
+      scene.background = new THREE.Color(0x1a1a2e);
+      scene.fog = new THREE.Fog(0x1a1a2e, 30, 100);
+
+      camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+
+      renderer = new THREE.WebGLRenderer({ antialias: true });
+      renderer.setSize(window.innerWidth, window.innerHeight);
+      renderer.shadowMap.enabled = true;
+      document.body.appendChild(renderer.domElement);
+
+      // Lights
+      const ambientLight = new THREE.AmbientLight(0xffffff, 0.4);
+      scene.add(ambientLight);
+
+      const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+      dirLight.position.set(10, 20, 10);
+      dirLight.castShadow = true;
+      scene.add(dirLight);
+
+      // Add some point lights for atmosphere
+      const colors = [0x00d9ff, 0x00ff88, 0xff00ff];
+      colors.forEach((color, i) => {
+        const light = new THREE.PointLight(color, 0.5, 50);
+        light.position.set(Math.sin(i * 2) * 20, 10, -30 - i * 20);
+        scene.add(light);
+      });
+
+      // Stars background
+      const starsGeo = new THREE.BufferGeometry();
+      const starPositions = [];
+      for (let i = 0; i < 2000; i++) {
+        starPositions.push(
+          (Math.random() - 0.5) * 500,
+          (Math.random() - 0.5) * 500,
+          (Math.random() - 0.5) * 500
+        );
+      }
+      starsGeo.setAttribute('position', new THREE.Float32BufferAttribute(starPositions, 3));
+      const starsMat = new THREE.PointsMaterial({ color: 0xffffff, size: 0.5 });
+      const stars = new THREE.Points(starsGeo, starsMat);
+      scene.add(stars);
+
+      // Controls
+      document.addEventListener('keydown', (e) => {
+        if (e.code === 'ArrowLeft' || e.code === 'KeyA') keys.left = true;
+        if (e.code === 'ArrowRight' || e.code === 'KeyD') keys.right = true;
+      });
+      document.addEventListener('keyup', (e) => {
+        if (e.code === 'ArrowLeft' || e.code === 'KeyA') keys.left = false;
+        if (e.code === 'ArrowRight' || e.code === 'KeyD') keys.right = false;
+      });
+
+      // Mobile
+      const leftBtn = document.getElementById('left-btn');
+      const rightBtn = document.getElementById('right-btn');
+      leftBtn.addEventListener('touchstart', (e) => { e.preventDefault(); keys.left = true; });
+      leftBtn.addEventListener('touchend', (e) => { e.preventDefault(); keys.left = false; });
+      rightBtn.addEventListener('touchstart', (e) => { e.preventDefault(); keys.right = true; });
+      rightBtn.addEventListener('touchend', (e) => { e.preventDefault(); keys.right = false; });
+
+      window.addEventListener('resize', () => {
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+      });
+
+      animate();
+    }
+
+    function createPlayer() {
+      const geo = new THREE.BoxGeometry(0.8, 0.8, 0.8);
+      const mat = new THREE.MeshLambertMaterial({ color: 0x00d9ff });
+      player = new THREE.Mesh(geo, mat);
+      player.castShadow = true;
+      player.position.set(0, 0.5, 0);
+      scene.add(player);
+
+      // Add glow effect
+      const glowGeo = new THREE.BoxGeometry(1, 1, 1);
+      const glowMat = new THREE.MeshBasicMaterial({
+        color: 0x00d9ff,
+        transparent: true,
+        opacity: 0.3
+      });
+      const glow = new THREE.Mesh(glowGeo, glowMat);
+      player.add(glow);
+
+      playerVelocity = new THREE.Vector3(0, 0, 0);
+    }
+
+    function createPath(levelNum) {
+      // Clear existing path
+      pathSegments.forEach(seg => scene.remove(seg));
+      pathSegments = [];
+      if (finishZone) scene.remove(finishZone);
+
+      const level = levelData[levelNum];
+      let currentPos = new THREE.Vector3(0, 0, 0);
+      let currentAngle = 0;
+      let currentElevation = 5; // Start floating
+
+      level.segments.forEach((seg, index) => {
+        // Create path segment
+        const geo = new THREE.BoxGeometry(seg.width, 0.5, seg.length);
+
+        // Gradient color based on index
+        const hue = (index / level.segments.length) * 0.3;
+        const color = new THREE.Color().setHSL(0.5 + hue, 0.7, 0.4);
+        const mat = new THREE.MeshLambertMaterial({ color });
+
+        const segment = new THREE.Mesh(geo, mat);
+        segment.receiveShadow = true;
+
+        // Apply turn incrementally
+        currentAngle += seg.turn;
+        currentElevation += seg.elevation;
+
+        // Position segment
+        const offsetX = Math.sin(currentAngle) * seg.length / 2;
+        const offsetZ = -Math.cos(currentAngle) * seg.length / 2;
+
+        segment.position.set(
+          currentPos.x + offsetX,
+          currentElevation,
+          currentPos.z + offsetZ
+        );
+        segment.rotation.y = currentAngle;
+
+        // Add edge rails for visual guidance
+        const railGeo = new THREE.BoxGeometry(0.2, 0.3, seg.length);
+        const railMat = new THREE.MeshLambertMaterial({ color: 0x00ff88 });
+
+        [-1, 1].forEach(side => {
+          const rail = new THREE.Mesh(railGeo, railMat);
+          rail.position.x = side * (seg.width / 2 - 0.1);
+          rail.position.y = 0.4;
+          segment.add(rail);
+        });
+
+        scene.add(segment);
+        pathSegments.push(segment);
+
+        // Update position for next segment
+        currentPos.x += Math.sin(currentAngle) * seg.length;
+        currentPos.z -= Math.cos(currentAngle) * seg.length;
+
+        // Store segment bounds for collision
+        segment.userData = {
+          width: seg.width,
+          length: seg.length,
+          elevation: currentElevation,
+          angle: currentAngle
+        };
+      });
+
+      // Create finish zone
+      const finishGeo = new THREE.BoxGeometry(4, 0.6, 4);
+      const finishMat = new THREE.MeshLambertMaterial({ color: 0xffdd00 });
+      finishZone = new THREE.Mesh(finishGeo, finishMat);
+      finishZone.position.set(currentPos.x, currentElevation, currentPos.z);
+      scene.add(finishZone);
+
+      // Add finish glow
+      const finishGlow = new THREE.PointLight(0xffdd00, 1, 10);
+      finishGlow.position.set(0, 2, 0);
+      finishZone.add(finishGlow);
+    }
+
+    function startLevel(num) {
+      currentLevel = num;
+      document.getElementById('level-select').classList.add('hidden');
+      document.getElementById('win-screen').classList.add('hidden');
+      document.getElementById('lose-screen').classList.add('hidden');
+      document.getElementById('level-display').textContent = `Level ${num}: ${levelData[num].name}`;
+
+      // Clear old player
+      if (player) scene.remove(player);
+
+      createPath(num);
+      createPlayer();
+
+      // Reset player position
+      player.position.set(0, 6, 2);
+      playerVelocity.set(0, 0, 0);
+      player.rotation.y = 0;
+
+      playerSpeed = levelData[num].speed;
+      isPlaying = true;
+    }
+
+    function retryLevel() {
+      startLevel(currentLevel);
+    }
+
+    function nextLevel() {
+      if (currentLevel < 5) {
+        startLevel(currentLevel + 1);
+      } else {
+        showMenu();
+      }
+    }
+
+    function showMenu() {
+      isPlaying = false;
+      document.getElementById('level-select').classList.remove('hidden');
+      document.getElementById('win-screen').classList.add('hidden');
+      document.getElementById('lose-screen').classList.add('hidden');
+    }
+
+    function win() {
+      isPlaying = false;
+      document.getElementById('win-screen').classList.remove('hidden');
+    }
+
+    function lose() {
+      isPlaying = false;
+      document.getElementById('lose-screen').classList.remove('hidden');
+    }
+
+    function checkOnPath() {
+      const playerPos = player.position.clone();
+      let onAnyPath = false;
+      let pathHeight = -100;
+
+      for (const segment of pathSegments) {
+        // Transform player position to segment's local space
+        const localPos = playerPos.clone().sub(segment.position);
+
+        // Rotate to align with segment
+        const angle = -segment.rotation.y;
+        const rotatedX = localPos.x * Math.cos(angle) - localPos.z * Math.sin(angle);
+        const rotatedZ = localPos.x * Math.sin(angle) + localPos.z * Math.cos(angle);
+
+        const halfWidth = segment.userData.width / 2;
+        const halfLength = segment.userData.length / 2;
+
+        // Check if player is within segment bounds (XZ)
+        if (Math.abs(rotatedX) < halfWidth && Math.abs(rotatedZ) < halfLength) {
+          // Check if player is close to segment height
+          if (playerPos.y - segment.position.y < 2 && playerPos.y - segment.position.y > -0.5) {
+            onAnyPath = true;
+            pathHeight = Math.max(pathHeight, segment.position.y + 0.25);
+          }
+        }
+      }
+
+      // Check finish zone
+      const finishDist = player.position.distanceTo(finishZone.position);
+      if (finishDist < 2.5 && player.position.y - finishZone.position.y < 2) {
+        win();
+        return { onPath: true, height: finishZone.position.y + 0.3 };
+      }
+
+      return { onPath: onAnyPath, height: pathHeight };
+    }
+
+    function animate() {
+      requestAnimationFrame(animate);
+
+      if (isPlaying && player) {
+        // Turn
+        if (keys.left) {
+          player.rotation.y += turnSpeed;
+        }
+        if (keys.right) {
+          player.rotation.y -= turnSpeed;
+        }
+
+        // Move forward in facing direction
+        const moveX = Math.sin(player.rotation.y) * playerSpeed;
+        const moveZ = -Math.cos(player.rotation.y) * playerSpeed;
+
+        player.position.x += moveX;
+        player.position.z += moveZ;
+
+        // Gravity
+        playerVelocity.y += gravity;
+        player.position.y += playerVelocity.y;
+
+        // Check ground collision
+        const pathCheck = checkOnPath();
+
+        if (pathCheck.onPath && player.position.y <= pathCheck.height + 0.5) {
+          player.position.y = pathCheck.height + 0.5;
+          playerVelocity.y = 0;
+          onGround = true;
+        } else {
+          onGround = false;
+        }
+
+        // Fall death
+        if (player.position.y < -20) {
+          lose();
+        }
+
+        // Spin the player cube for visual effect
+        player.children[0].rotation.x += 0.02;
+        player.children[0].rotation.z += 0.01;
+
+        // Camera follow
+        const camOffset = new THREE.Vector3(
+          Math.sin(player.rotation.y) * 8,
+          5,
+          Math.cos(player.rotation.y) * 8
+        );
+        camera.position.lerp(player.position.clone().add(camOffset), 0.05);
+        camera.lookAt(player.position);
+      }
+
+      renderer.render(scene, camera);
+    }
+
+    init();
+  </script>
+</body>
+</html>
