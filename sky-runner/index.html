@@ -250,14 +250,14 @@
 
   <div class="overlay lose hidden" id="lose-screen">
     <h1>You Fell!</h1>
-    <p>Try to stay on the path</p>
+    <p>Press SPACE to try again</p>
     <div>
       <button class="retry" onclick="retryLevel()">Try Again</button>
       <button class="menu" onclick="showMenu()">Menu</button>
     </div>
   </div>
 
-  <div class="controls-hint">LEFT/RIGHT arrows or A/D to turn</div>
+  <div class="controls-hint">LEFT/RIGHT to turn | R to restart | SPACE to respawn</div>
 
   <div class="mobile-controls">
     <button class="mobile-btn" id="left-btn">&larr;</button>
@@ -404,9 +404,21 @@
       scene.add(stars);
 
       // Controls
+      let isDead = false;
+
       document.addEventListener('keydown', (e) => {
         if (e.code === 'ArrowLeft' || e.code === 'KeyA') keys.left = true;
         if (e.code === 'ArrowRight' || e.code === 'KeyD') keys.right = true;
+
+        // Space to respawn when dead
+        if (e.code === 'Space' && isDead) {
+          retryLevel();
+        }
+
+        // R to reset anytime during play
+        if (e.code === 'KeyR' && isPlaying) {
+          retryLevel();
+        }
       });
       document.addEventListener('keyup', (e) => {
         if (e.code === 'ArrowLeft' || e.code === 'KeyA') keys.left = false;
@@ -531,6 +543,7 @@
 
     function startLevel(num) {
       currentLevel = num;
+      isDead = false;
       document.getElementById('level-select').classList.add('hidden');
       document.getElementById('win-screen').classList.add('hidden');
       document.getElementById('lose-screen').classList.add('hidden');
@@ -542,8 +555,9 @@
       createPath(num);
       createPlayer();
 
-      // Reset player position
-      player.position.set(0, 6, 2);
+      // Reset player position - spawn on the first path segment
+      // First segment is at y=5, centered at z=-length/2, so spawn near z=-3
+      player.position.set(0, 5.7, -3);
       playerVelocity.set(0, 0, 0);
       player.rotation.y = 0;
 
@@ -577,6 +591,7 @@
 
     function lose() {
       isPlaying = false;
+      isDead = true;
       document.getElementById('lose-screen').classList.remove('hidden');
     }
 
