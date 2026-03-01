@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Nolan Crane</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      background: #0a0a0a;
+      color: #e0e0e0;
+      min-height: 100vh;
+      padding: 3rem 2rem;
+    }
+    .container { max-width: 600px; margin: 0 auto; }
+    h1 { font-size: 2rem; margin-bottom: 0.5rem; color: #fff; }
+    .subtitle { color: #666; margin-bottom: 3rem; }
+    .projects { list-style: none; }
+    .projects li { margin-bottom: 1rem; }
+    .projects a {
+      display: block;
+      padding: 1rem 1.25rem;
+      background: #151515;
+      border: 1px solid #252525;
+      border-radius: 8px;
+      color: #fff;
+      text-decoration: none;
+      transition: all 0.15s;
+    }
+    .projects a:hover {
+      background: #1a1a1a;
+      border-color: #404040;
+      transform: translateX(4px);
+    }
+    .projects .title { font-weight: 500; }
+    .projects .desc { font-size: 0.875rem; color: #666; margin-top: 0.25rem; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Nolan Crane</h1>
+    <p class="subtitle">games & experiments</p>
+
+    <ul class="projects">
+      <li>
+        <a href="/click-game/">
+          <div class="title">Click Game</div>
+          <div class="desc">A simple clicking game - sample project</div>
+        </a>
+      </li>
+      <!-- Add new projects here -->
+    </ul>
+  </div>
+</body>
+</html>

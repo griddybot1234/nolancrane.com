@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Click Game</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      background: #0a0a0a;
+      color: #fff;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      user-select: none;
+    }
+    .score { font-size: 4rem; font-weight: 700; margin-bottom: 2rem; }
+    .target {
+      width: 120px;
+      height: 120px;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      border-radius: 50%;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 2rem;
+      transition: transform 0.1s;
+      box-shadow: 0 10px 40px rgba(102, 126, 234, 0.4);
+    }
+    .target:hover { transform: scale(1.05); }
+    .target:active { transform: scale(0.95); }
+    .message { margin-top: 2rem; color: #666; }
+    .back { position: fixed; top: 1rem; left: 1rem; color: #666; text-decoration: none; }
+    .back:hover { color: #fff; }
+    .particles { position: fixed; pointer-events: none; }
+    .particle {
+      position: absolute;
+      font-size: 1.5rem;
+      animation: float 1s ease-out forwards;
+    }
+    @keyframes float {
+      0% { opacity: 1; transform: translateY(0) scale(1); }
+      100% { opacity: 0; transform: translateY(-100px) scale(0); }
+    }
+  </style>
+</head>
+<body>
+  <a href="/" class="back">&larr; back</a>
+  <div class="score" id="score">0</div>
+  <div class="target" id="target">+1</div>
+  <p class="message">click to score</p>
+  <div class="particles" id="particles"></div>
+
+  <script>
+    let score = 0;
+    const scoreEl = document.getElementById('score');
+    const target = document.getElementById('target');
+    const particles = document.getElementById('particles');
+
+    target.addEventListener('click', (e) => {
+      score++;
+      scoreEl.textContent = score;
+
+      // Create particle effect
+      const particle = document.createElement('div');
+      particle.className = 'particle';
+      particle.textContent = '+1';
+      particle.style.left = e.clientX + 'px';
+      particle.style.top = e.clientY + 'px';
+      particles.appendChild(particle);
+      setTimeout(() => particle.remove(), 1000);
+
+      // Color shift at milestones
+      if (score % 10 === 0) {
+        const hue = (score * 3) % 360;
+        target.style.background = `linear-gradient(135deg, hsl(${hue}, 70%, 60%) 0%, hsl(${hue + 40}, 50%, 50%) 100%)`;
+      }
+    });
+  </script>
+</body>
+</html>
